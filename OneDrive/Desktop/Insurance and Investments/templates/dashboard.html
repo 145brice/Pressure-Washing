@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reddit Insurance & Investment Scraper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px 30px;
+            background: #fafafa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .stat-card {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .per-page-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .per-page-control label {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .per-page-control select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+            color: #555;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .type-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .type-badge.post {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .type-badge.comment {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        
+        .link-icon {
+            cursor: pointer;
+            color: #667eea;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        
+        .link-icon:hover {
+            color: #764ba2;
+        }
+        
+        .text-truncate {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .subtitle {
+            color: #999;
+            font-size: 12px;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .pagination button,
+        .pagination a {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            color: #667eea;
+            cursor: pointer;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .pagination button:hover,
+        .pagination a:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .pagination .current-page {
+            padding: 8px 12px;
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Reddit Insurance & Investment Scraper</h1>
+            <p>Live monitoring dashboard</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="postsCount">0</div>
+                <div class="stat-label">Posts Found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="commentsCount">0</div>
+                <div class="stat-label">Comments Collected</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalCount">0</div>
+                <div class="stat-label">Total Entries</div>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="controls">
+                <div class="per-page-control">
+                    <label>Rows per page:</label>
+                    <select id="perPageSelect">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>ID</th>
+                            <th>Comments</th>
+                            <th>Score</th>
+                            <th>Hits</th>
+                            <th>Post Time (UTC)</th>
+                            <th>Caught Time (UTC)</th>
+                            <th>Author</th>
+                            <th>Title / Body</th>
+                            <th>Link</th>
+                            <th>Subreddit</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr>
+                            <td colspan="11" class="loading">
+                                <div class="spinner"></div>
+                                Loading data...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="pagination" id="pagination">
+                <!-- Pagination controls generated by JS -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentPage = 1;
+        let perPage = 50;
+        let totalPages = 1;
+        
+        const perPageSelect = document.getElementById('perPageSelect');
+        perPageSelect.addEventListener('change', (e) => {
+            perPage = parseInt(e.target.value);
+            currentPage = 1;
+            loadData();
+        });
+        
+        async function loadData() {
+            try {
+                const response = await fetch(`/api/data?page=${currentPage}&per_page=${perPage}`);
+                const data = await response.json();
+                
+                updateStats(data.stats);
+                renderTable(data.entries);
+                renderPagination(data.total_pages);
+                totalPages = data.total_pages;
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+        
+        function updateStats(stats) {
+            document.getElementById('postsCount').textContent = stats.posts_found;
+            document.getElementById('commentsCount').textContent = stats.comments_collected;
+            document.getElementById('totalCount').textContent = stats.total_entries;
+        }
+        
+        function renderTable(entries) {
+            const tbody = document.getElementById('tableBody');
+            
+            if (entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" class="loading">No entries yet</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = entries.map(entry => `
+                <tr>
+                    <td>
+                        <span class="type-badge ${entry.type.toLowerCase()}">
+                            ${entry.type}
+                        </span>
+                    </td>
+                    <td class="subtitle">${entry.post_id || entry.comment_id}</td>
+                    <td>${entry.comment_count || '-'}</td>
+                    <td>${entry.score || '-'}</td>
+                    <td>${entry.hit_count || '-'}</td>
+                    <td class="subtitle">${entry.post_time}</td>
+                    <td class="subtitle">${entry.caught_time}</td>
+                    <td>${entry.author}</td>
+                    <td>
+                        <div class="text-truncate" title="${entry.title || entry.body}">
+                            ${entry.title || entry.body}
+                        </div>
+                    </td>
+                    <td>
+                        <a href="${entry.url}" target="_blank" class="link-icon">🔗</a>
+                    </td>
+                    <td>r/${entry.subreddit}</td>
+                </tr>
+            `).join('');
+        }
+        
+        function renderPagination(totalPages) {
+            const pagination = document.getElementById('pagination');
+            let html = '';
+            
+            // Previous button
+            html += `<button onclick="prevPage()" ${currentPage === 1 ? 'disabled' : ''}>← Previous</button>`;
+            
+            // Page numbers
+            html += `<span class="current-page">Page ${currentPage} of ${totalPages}</span>`;
+            
+            // Next button
+            html += `<button onclick="nextPage()" ${currentPage === totalPages ? 'disabled' : ''}>Next →</button>`;
+            
+            pagination.innerHTML = html;
+        }
+        
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadData();
+                window.scrollTo(0, 0);
+            }
+        }
+        
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadData();
+                window.scrollTo(0, 0);
+            }
+        }
+        
+        // Load data on page load and refresh every 5 seconds
+        loadData();
+        setInterval(loadData, 5000);
+    </script>
+</body>
+</html>
