@@ -38,10 +38,6 @@ def human_delay(short=False):
     else:
         time.sleep(random.uniform(5, 15))
 
-def should_skip_post():
-    """Randomly skip posts (10-15% chance)"""
-    return random.random() < 0.12
-
 def check_rate_limit():
     """Ensure we don't exceed rate limit"""
     global request_times
@@ -68,51 +64,65 @@ SUBS = [
     'RealEstateInvesting', 'tax'
 ]
 
-# Keywords - focused on people expressing need or asking for help
-KEYWORDS = [
-    # Insurance - People with need
+# Keywords split into two alternating groups (A then B, repeat)
+# Group A: 32 keywords — Insurance + Health + Home/Auto + some Investment
+KEYWORDS_A = [
+    # Insurance core
     'need insurance', 'shopping for insurance', 'insurance advice',
     'which insurance', 'best insurance', 'insurance recommendation',
     'dropped by insurance', 'insurance cancelled', 'denied claim',
     'premium too high', 'deductible', 'coverage question',
     'bodily injury', 'underwriting', 'copay', 'coinsurance',
     'claim adjuster', 'loss of use', 'subrogation',
-    # Life Insurance - People with need
+    # Health Insurance
+    'no health insurance', 'lost insurance', 'open enrollment',
+    'marketplace plan', 'COBRA', 'health insurance options',
+    # Home/Auto
+    'homeowners insurance', 'renters insurance', 'auto insurance quote',
+    'car insurance too expensive', 'home insurance claim',
+    # Investments overflow
+    'how to invest', 'new to investing',
+]
+
+# Group B: 31 keywords — Life Insurance + Investments + General
+KEYWORDS_B = [
+    # Life Insurance
     'need life insurance', 'term life', 'whole life', 'annuity',
     'universal life', 'variable life', 'life insurance advice',
     'umbrella policy', 'liability insurance',
-    # Health Insurance - People with need
-    'no health insurance', 'lost insurance', 'open enrollment',
-    'marketplace plan', 'COBRA', 'health insurance options',
-    # Home/Auto - People with need
-    'homeowners insurance', 'renters insurance', 'auto insurance quote',
-    'car insurance too expensive', 'home insurance claim',
-    # Investments - People with need
-    'how to invest', 'new to investing', 'where to invest',
-    'mutual fund', 'ETF recommendation', 'portfolio advice',
-    'dividend investing', 'asset allocation',
+    # Investments
+    'where to invest', 'mutual fund', 'ETF recommendation',
+    'portfolio advice', 'dividend investing', 'asset allocation',
     '401k rollover', '401k advice', 'IRA contribution', 'Roth IRA',
     'fiduciary', 'financial advisor', 'retirement planning',
     'how much to retire', 'behind on retirement',
-    # General financial need signals
+    # General need signals
     'need help with finances', 'financial planning advice',
     'what should I do with', 'first time investor',
-    'just inherited', 'windfall', 'lump sum'
+    'just inherited', 'windfall', 'lump sum',
 ]
 
+# All keywords combined (used by hot posts monitor and contains_keyword)
+KEYWORDS = KEYWORDS_A + KEYWORDS_B
+
 def send_post(post_data):
-    """Send a post to the local dashboard"""
+    """Send a post to the local dashboard — skip if already seen"""
     global seen_post_ids
-    
+
     try:
         post_id = post_data['id']
+
+        # Skip posts we've already sent
+        if post_id in seen_post_ids:
+            return False
+
         # Only allow posts from target subreddits
         post_sub = post_data.get('subreddit', '').lower()
         if post_sub not in [s.lower() for s in SUBS]:
-            return
-        is_new = post_id not in seen_post_ids
+            return False
+
         seen_post_ids.add(post_id)
-        
+
         data = {
             'post_id': post_id,
             'comment_count': post_data['num_comments'],
@@ -124,18 +134,17 @@ def send_post(post_data):
             'subreddit': post_data['subreddit'],
             'url': f"https://reddit.com{post_data['permalink']}"
         }
-        
+
         response = requests.post(f'{SERVER_URL}/api/post', json=data, timeout=5)
         if response.status_code == 200:
-            status = response.json().get('status', 'unknown')
-            if status == 'created':
-                print(f"[NEW] {post_id} ({post_data['num_comments']} comments)")
-            elif status == 'updated':
-                print(f"[UPD] {post_id} ({post_data['num_comments']} comments)")
+            print(f"[NEW] {post_id} ({post_data['num_comments']} comments)")
+            return True
         else:
             print(f"[FAIL] Failed to post {post_id}: {response.status_code}")
+            return False
     except Exception as e:
         print(f"Error sending post: {e}")
+        return False
 
 def search_reddit(sub, keyword):
     """Search Reddit subreddit for keyword"""
@@ -180,19 +189,25 @@ def search_reddit(sub, keyword):
         if response.status_code == 200:
             data = response.json()
             posts = data.get('data', {}).get('children', [])
-            
+
             posted_count = 0
+            skipped = 0
             for post in posts:
-                if should_skip_post():
-                    continue
-                    
                 post_data = post['data']
-                send_post(post_data)
-                posted_count += 1
-                
-                # Small delay between posts
-                human_delay(short=True)
-            
+
+                # Skip already-seen posts immediately (no delay wasted)
+                if post_data['id'] in seen_post_ids:
+                    skipped += 1
+                    continue
+
+                if send_post(post_data):
+                    posted_count += 1
+                    # Only delay between actual new posts
+                    human_delay(short=True)
+
+            if skipped > 0:
+                print(f"  (skipped {skipped} already-seen posts)")
+
             return posted_count
         else:
             print(f"Search error for r/{sub}: {response.status_code}")
@@ -202,39 +217,45 @@ def search_reddit(sub, keyword):
         return 0
 
 def scrape_streams():
-    """Search for keywords on Reddit with human-like behavior"""
+    """Alternate between keyword Group A and Group B each cycle"""
     print("Starting Reddit search scraper...")
-    searched = set()
-    
+    groups = [('A', KEYWORDS_A), ('B', KEYWORDS_B)]
+    cycle_index = 0
+
     while True:
+        group_name, group_keywords = groups[cycle_index % 2]
+        cycle_index += 1
+        print(f"\n{'='*50}")
+        print(f"[CYCLE {cycle_index}] Starting Group {group_name} ({len(group_keywords)} keywords x {len(SUBS)} subs = {len(group_keywords)*len(SUBS)} searches)")
+        print(f"{'='*50}")
+
         try:
-            # Shuffle for randomness
             shuffled_subs = SUBS.copy()
             random.shuffle(shuffled_subs)
-            
+
             for sub in shuffled_subs:
-                shuffled_keywords = KEYWORDS.copy()
+                shuffled_keywords = group_keywords.copy()
                 random.shuffle(shuffled_keywords)
-                
+
                 for keyword in shuffled_keywords:
-                    search_key = f"{sub}:{keyword}"
-                    if search_key not in searched:
-                        print(f"Searching r/{sub} for '{keyword}'...")
-                        found = search_reddit(sub, keyword)
-                        print(f"Found and posted {found} posts")
-                        searched.add(search_key)
-                        
-                        # Vary delays significantly
-                        human_delay()
-                    
+                    print(f"Searching r/{sub} for '{keyword}'...")
+                    found = search_reddit(sub, keyword)
+                    print(f"Found {found} new posts")
+
+                    human_delay()
+
                     # Occasional longer pause (2-3% chance)
                     if random.random() < 0.02:
                         print("Taking a longer break...")
                         time.sleep(random.uniform(30, 60))
-                
+
                 # Longer pause between subreddits
                 human_delay()
-        
+
+            print(f"\n[CYCLE {cycle_index}] Group {group_name} complete!")
+            print(f"[INFO] Seen posts total: {len(seen_post_ids)}")
+            print(f"[INFO] Next up: Group {'B' if group_name == 'A' else 'A'}")
+
         except Exception as e:
             print(f"Stream error: {e}")
             time.sleep(60)
@@ -277,18 +298,19 @@ def resight_hot_posts():
                     if response.status_code == 200:
                         data = response.json()
                         posts = data.get('data', {}).get('children', [])
-                        
+
                         for post in posts:
-                            if should_skip_post():
-                                continue
-                                
                             post_data = post['data']
+
+                            # Skip already-seen posts
+                            if post_data['id'] in seen_post_ids:
+                                continue
+
                             # Only show hot posts with keywords
                             title_body = f"{post_data['title']} {post_data.get('selftext', '')}"
                             if contains_keyword(title_body):
-                                send_post(post_data)
-                            
-                            human_delay(short=True)
+                                if send_post(post_data):
+                                    human_delay(short=True)
                     
                     human_delay()
                 
@@ -318,12 +340,38 @@ def monitor_backoff_status():
         print(f"[BACKOFF STATUS] Mode: {status} | Multiplier: {backoff_multiplier}x | Max: {max_backoff_multiplier}x")
         time.sleep(30)  # Print status every 30 seconds
 
+def load_seen_posts():
+    """Load already-known post IDs from the server so we skip them"""
+    global seen_post_ids
+    try:
+        # Fetch all posts from the dashboard API
+        page = 1
+        while True:
+            response = requests.get(f'{SERVER_URL}/api/data', params={'page': page, 'per_page': 100}, timeout=10)
+            if response.status_code != 200:
+                break
+            data = response.json()
+            for entry in data.get('entries', []):
+                pid = entry.get('post_id', '')
+                if pid:
+                    seen_post_ids.add(pid)
+            if page >= data.get('total_pages', 1):
+                break
+            page += 1
+        print(f"[INIT] Loaded {len(seen_post_ids)} previously seen post IDs")
+    except Exception as e:
+        print(f"[INIT] Could not load seen posts from server: {e}")
+        print(f"[INIT] Starting fresh — duplicates may be sent on first cycle")
+
 if __name__ == '__main__':
     print("=" * 50)
     print("Reddit Scraper - Local Dashboard Mode")
     print(f"Dashboard: {SERVER_URL}")
     print("=" * 50)
-    
+
+    # Load existing post IDs so we skip them
+    load_seen_posts()
+
     # Start scraper threads
     threading.Thread(target=scrape_streams, daemon=True).start()
     threading.Thread(target=resight_hot_posts, daemon=True).start()
