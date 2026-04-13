@@ -1,0 +1,55 @@
+.cta-banner {
+  background: linear-gradient(135deg, var(--blue-600) 0%, var(--blue-800) 100%);
+  padding: 64px 0;
+}
+
+.cta-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.cta-text h2 {
+  color: var(--white);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  margin-bottom: 8px;
+}
+
+.cta-text p {
+  color: rgba(255,255,255,0.8);
+  font-size: 1.05rem;
+}
+
+.cta-actions {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.cta-phone {
+  border-color: rgba(255,255,255,0.4);
+  color: var(--white);
+}
+
+.cta-phone:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: var(--white);
+  color: var(--white);
+}
+
+@media (max-width: 768px) {
+  .cta-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .cta-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .cta-actions .btn {
+    width: 100%;
+  }
+}

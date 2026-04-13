@@ -1,0 +1,26 @@
+.book-page {
+  min-height: 80vh;
+}
+
+.book-hero {
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 50%, #ecfeff 100%);
+  padding: 48px 0;
+  text-align: center;
+}
+
+.book-hero .badge {
+  margin-bottom: 16px;
+}
+
+.book-hero h1 {
+  margin-bottom: 12px;
+}
+
+.book-hero p {
+  color: var(--text-light);
+  font-size: 1.1rem;
+}
+
+.book-content {
+  padding: 48px 20px 80px;
+}
