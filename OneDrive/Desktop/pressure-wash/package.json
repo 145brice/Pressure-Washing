@@ -2,7 +2,6 @@
   "name": "pressure-wash",
   "private": true,
   "version": "0.0.0",
-  "homepage": "https://145brice.github.io/Pressure-Washing/",
   "type": "module",
   "scripts": {
     "dev": "vite",
